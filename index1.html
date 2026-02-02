@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Lemon Clicker</title>
+    <!-- Подключаем скрипт Telegram -->
+    <script src="https://telegram.org"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #FFF59D;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        #score {
+            font-size: 4rem;
+            font-weight: 900;
+            color: #F57F17;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 0px rgba(255,255,255,0.5);
+        }
+
+        .lemon-container {
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.05s ease-in-out;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .lemon {
+            font-size: 160px;
+            display: block;
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.15));
+        }
+
+        .lemon-container:active {
+            transform: scale(0.92);
+        }
+
+        .plus-one {
+            position: absolute;
+            color: #E65100;
+            font-weight: bold;
+            font-size: 2rem;
+            pointer-events: none;
+            animation: floatUp 0.7s ease-out forwards;
+            z-index: 100;
+        }
+
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-120px) scale(1.5); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="score">0</div>
+
+    <div class="lemon-container" id="lemon-btn">
+        <span class="lemon">🍋</span>
+    </div>
+
+    <script>
+        // Безопасная инициализация Telegram SDK
+        const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+        
+        if (tg) {
+            tg.expand();
+            tg.ready();
+        }
+
+        // Загрузка счета
+        let count = 0;
+        try {
+            count = parseInt(localStorage.getItem('lemon_count')) || 0;
+        } catch (e) {
+            console.log("Доступ к LocalStorage ограничен");
+        }
+
+        const scoreElement = document.getElementById('score');
+        scoreElement.innerText = count;
+
+        function handleInteraction(e) {
+            // Увеличиваем счет
+            count++;
+            scoreElement.innerText = count;
+            
+            // Сохраняем прогресс
+            try {
+                localStorage.setItem('lemon_count', count);
+            } catch (e) {}
+
+            // Вибрация (только если мы в ТГ)
+            if (tg && tg.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('medium');
+            }
+
+            // Определяем координаты для анимации +1
+            let x, y;
+            if (e.type === 'touchstart' || e.type === 'touchend') {
+                x = e.changedTouches[0].clientX;
+                y = e.changedTouches[0].clientY;
+            } else {
+                x = e.clientX;
+                y = e.clientY;
+            }
+
+            createParticle(x, y);
+        }
+
+        const lemonBtn = document.getElementById('lemon-btn');
+        
+        // Слушаем нажатия (pointerdown работает на ПК и смартфонах)
+        lemonBtn.addEventListener('pointerdown', handleInteraction);
+
+        function createParticle(x, y) {
+            const p = document.createElement('div');
+            p.innerText = '+1';
+            p.className = 'plus-one';
+            
+            const posX = x || window.innerWidth / 2;
+            const posY = y || window.innerHeight / 2;
+            
+            p.style.left = (posX - 20) + 'px';
+            p.style.top = (posY - 20) + 'px';
+            
+            document.body.appendChild(p);
+            
+            setTimeout(() => p.remove(), 700);
+        }
+    </script>
+</body>
+</html>
