@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Lemon Clicker</title>
+    <script src="https://telegram.org"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #FFF59D;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        #score {
+            font-size: 4rem;
+            font-weight: 900;
+            color: #F57F17;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 0px rgba(255,255,255,0.5);
+        }
+
+        .lemon-container {
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.05s ease-in-out;
+            -webkit-tap-highlight-color: transparent;
+            margin-bottom: 40px;
+        }
+
+        .lemon {
+            font-size: 160px;
+            display: block;
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.15));
+        }
+
+        .lemon-container:active {
+            transform: scale(0.92);
+        }
+
+        .progress-container {
+            width: 250px;
+            height: 14px;
+            background-color: #FBC02D;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background-color: #FFF9C4;
+            transition: width 0.2s ease-out;
+        }
+
+        .goal-badge {
+            margin-top: 10px;
+            background-color: #FBC02D;
+            color: #FFF9C4;
+            padding: 4px 15px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .plus-one {
+            position: absolute;
+            color: #E65100;
+            font-weight: bold;
+            font-size: 2rem;
+            pointer-events: none;
+            animation: floatUp 0.7s ease-out forwards;
+            z-index: 100;
+        }
+
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-120px) scale(1.5); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="score">0</div>
+
+    <div class="lemon-container" id="lemon-btn">
+        <span class="lemon">🍋</span>
+    </div>
+
+    <div class="progress-container">
+        <div class="progress-fill" id="progress-fill"></div>
+    </div>
+    <div class="goal-badge" id="goal-text">10000</div>
+
+    <script>
+        const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+        if (tg) { tg.expand(); tg.ready(); }
+
+        // --- ЛОГИКА СОХРАНЕНИЯ ---
+        let count = parseInt(localStorage.getItem('lemon_count')) || 0;
+        const goals = [10000, 100000, 150000, 1000000];
+        
+        const scoreElement = document.getElementById('score');
+        const progressFill = document.getElementById('progress-fill');
+        const goalText = document.getElementById('goal-text');
+
+        function saveData() {
+            try {
+                localStorage.setItem('lemon_count', count);
+            } catch (e) {
+                console.error("Ошибка сохранения:", e);
+            }
+        }
+
+        function updateUI() {
+            scoreElement.innerText = count.toLocaleString();
+            
+            // Находим текущую цель (первая, которая больше счета)
+            let currentGoal = goals.find(g => g > count) || goals[goals.length - 1];
+            goalText.innerText = currentGoal.toLocaleString();
+
+            // Процент заполнения
+            let percent = (count / currentGoal) * 100;
+            if (percent > 100) percent = 100;
+            progressFill.style.width = percent + '%';
+        }
+
+        function handleInteraction(e) {
+            count++;
+            updateUI();
+            saveData();
+
+            if (tg && tg.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('light');
+            }
+
+            // Координаты клика
+            let x, y;
+            if (e.type.startsWith('touch')) {
+                x = e.changedTouches[0].clientX;
+                y = e.changedTouches[0].clientY;
+            } else {
+                x = e.clientX;
+                y = e.clientY;
+            }
+            createParticle(x, y);
+        }
+
+        function createParticle(x, y) {
+            const p = document.createElement('div');
+            p.innerText = '+1';
+            p.className = 'plus-one';
+            p.style.left = (x - 20) + 'px';
+            p.style.top = (y - 20) + 'px';
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 700);
+        }
+
+        const lemonBtn = document.getElementById('lemon-btn');
+        // Используем pointerdown для мгновенного отклика
+        lemonBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            handleInteraction(e);
+        });
+
+        // Первичная отрисовка
+        updateUI();
+    </script>
+</body>
+</html
