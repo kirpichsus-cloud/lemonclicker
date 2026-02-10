@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Lemon Pass: Horizontal Edition</title>
+    <script src="https://telegram.org"></script>
+    <style>
+        :root { 
+            --yellow: #FFEB3B; --orange: #FFA000; --dark: #E65100; 
+            --purple: #9C27B0; --green: #43A047; --white: rgba(255,255,255,0.9); 
+        }
+        body {
+            margin: 0; padding: 0; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; height: 100vh;
+            background: radial-gradient(circle, #FFF9C4 0%, #FFF176 100%);
+            font-family: 'SF Pro Display', sans-serif;
+            overflow: hidden; user-select: none; -webkit-user-select: none; touch-action: manipulation;
+        }
+
+        /* Интерфейс управления */
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        .controls { position: absolute; top: 20px; left: 20px; display: flex; flex-direction: column; gap: 12px; pointer-events: auto; }
+        .stats { position: absolute; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
+
+        .round-btn { 
+            width: 44px; height: 44px; border-radius: 14px; border: none; 
+            background: white; color: var(--orange); font-size: 1.3rem;
+            cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            display: flex; align-items: center; justify-content: center; transition: 0.2s;
+        }
+        .round-btn:active { transform: scale(0.9); }
+        .btn-green { color: var(--green); }
+
+        .badge { 
+            background: white; padding: 6px 14px; border-radius: 20px; 
+            font-weight: 800; font-size: 0.8rem; box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            color: var(--dark); border: 1px solid rgba(0,0,0,0.03);
+        }
+
+        /* Тексты и центр */
+        #player-title { font-size: 0.7rem; font-weight: bold; color: var(--purple); margin-bottom: 5px; letter-spacing: 1px; }
+        #score { font-size: 3.8rem; font-weight: 900; color: var(--dark); margin: 0; }
+        #combo-info { font-weight: 800; color: #FF5252; height: 24px; font-size: 1rem; }
+        
+        #pass-mini-track { width: 180px; height: 8px; background: rgba(0,0,0,0.08); border-radius: 10px; margin-bottom: 20px; overflow: hidden; }
+        #pass-mini-bar { width: 0%; height: 100%; background: var(--purple); transition: 0.4s; }
+
+        /* ЛИМОН */
+        #lemon { 
+            font-size: 140px; cursor: pointer; z-index: 100; position: relative; 
+            transition: transform 0.1s cubic-bezier(0.17, 0.67, 0.83, 0.67);
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.1));
+        }
+
+        .main-btn { 
+            margin-top: 30px; width: 200px; padding: 14px; border: none; border-radius: 18px;
+            background: var(--purple); color: white; font-weight: 800; font-size: 0.85rem;
+            box-shadow: 0 6px 15px rgba(156, 39, 176, 0.3); cursor: pointer; z-index: 50;
+        }
+
+        /* ГОРИЗОНТАЛЬНЫЙ PASS */
+        .overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.5); backdrop-filter: blur(12px); 
+            display: none; align-items: flex-end; justify-content: center; z-index: 1000; 
+        }
+        .window { 
+            width: 100%; background: white; border-radius: 40px 40px 0 0; 
+            padding: 30px 0; max-height: 85vh; transform: translateY(100%); transition: 0.4s cubic-bezier(0.075, 0.82, 0.165, 1);
+        }
+        .overlay.active .window { transform: translateY(0); }
+
+        /* Лента наград */
+        .pass-track-wrapper {
+            overflow-x: auto; display: flex; padding: 40px 20px;
+            scroll-snap-type: x mandatory; gap: 15px; position: relative;
+            scrollbar-width: none; /* Убираем скроллбар */
+        }
+        .pass-track-wrapper::-webkit-scrollbar { display: none; }
+
+        .pass-card {
+            min-width: 120px; height: 180px; background: #fdfdfd; border-radius: 25px;
+            display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+            padding: 15px; flex-shrink: 0; scroll-snap-align: center;
+            border: 2px solid #f0f0f0; box-shadow: 0 10px 20px rgba(0,0,0,0.03);
+            position: relative; transition: 0.3s;
+        }
+        .pass-card.unlocked { border-color: var(--purple); background: #fbf5ff; }
+        .pass-card.final { min-width: 160px; background: linear-gradient(135deg, #fff, #f3e5f5); border: 2px solid gold; box-shadow: 0 0 20px rgba(255, 215, 0, 0.4); }
+
+        .lvl-badge { background: #eee; padding: 4px 10px; border-radius: 10px; font-size: 0.7rem; font-weight: bold; }
+        .reward-icon { font-size: 2.5rem; margin: 10px 0; }
+        .claim-btn { width: 100%; padding: 8px; border-radius: 12px; border: none; background: var(--purple); color: white; font-weight: bold; font-size: 0.7rem; cursor: pointer; }
+        .claim-btn:disabled { background: #ddd; color: #aaa; }
+
+        .plus-one { position: absolute; font-weight: 900; font-size: 2rem; pointer-events: none; animation: float 0.8s ease-out forwards; z-index: 2000; }
+        @keyframes float { 0% { opacity: 1; } 100% { opacity: 0; transform: translateY(-130px) scale(1.4); } }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div class="controls">
+            <button class="round-btn btn-green" onclick="getDaily()">🎁</button>
+            <button class="round-btn" onclick="openW('shop')">🛒</button>
+            <button class="round-btn" onclick="openW('top')">🏆</button>
+        </div>
+        <div class="stats">
+            <div class="badge" id="auto-val">🤖 0/s</div>
+            <div class="badge" style="color:var(--orange)">🍋 <span id="cur-val">0</span></div>
+        </div>
+    </div>
+    
+    <div id="player-title"></div>
+    <div id="score">0</div>
+    <div id="combo-info"></div>
+    <div id="pass-mini-track"><div id="pass-mini-bar"></div></div>
+
+    <div id="lemon">🍋</div>
+    
+    <button class="main-btn" onclick="openW('pass')">FEBRUARY PASS 🎫</button>
+
+    <!-- Окно горизонтального Пасса -->
+    <div id="modal-pass" class="overlay" onclick="closeW(event)"><div class="window">
+        <div style="padding: 0 25px;"><h2 style="margin:0; color:var(--purple)">Lemon Pass</h2><small>Листай вправо для наград →</small></div>
+        <div id="pass-list" class="pass-track-wrapper">
+            <!-- Здесь генерируются карточки -->
+        </div>
+        <div style="padding: 0 25px;"><button class="main-btn" style="width:100%" onclick="closeW()">ЗАКРЫТЬ</button></div>
+    </div></div>
+
+    <!-- Магазин и Топ (упрощенный дизайн для гармонии) -->
+    <div id="modal-shop" class="overlay" onclick="closeW(event)"><div class="window" style="padding-bottom:40px">
+        <div style="padding: 0 25px;"><h2>Магазин</h2>
+        <div style="background:#f9f9f9; padding:15px; border-radius:20px; display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div><b>Бустер X2</b><br><small>1 минута</small></div><button class="claim-btn" style="width:auto; padding:8px 15px;" onclick="buyB(2,1,10)">10 🍋</button>
+        </div>
+        <div style="background:#f9f9f9; padding:15px; border-radius:20px; display:flex; justify-content:space-between; align-items:center;">
+            <div><b>Бустер X5</b><br><small>5 минут</small></div><button class="claim-btn" style="width:auto; padding:8px 15px;" onclick="buyB(5,5,40)">40 🍋</button>
+        </div>
+        <button class="main-btn" style="width:100%; margin-top:20px; background:#eee; color:#666; box-shadow:none" onclick="closeW()">Закрыть</button></div>
+    </div></div>
+
+    <div id="modal-top" class="overlay" onclick="closeW(event)"><div class="window" style="padding: 30px 25px"><h2>Лидеры</h2><p>Ты: <b id="top-val">0</b></p><button class="main-btn" style="width:100%" onclick="closeW()">ОК</button></div></div>
+
+    <script>
+        const tg = window.Telegram?.WebApp;
+        if(tg) { tg.expand(); tg.ready(); }
+
+        let clicks = parseInt(localStorage.getItem('c')) || 0;
+        let currency = parseInt(localStorage.getItem('cur')) || 0;
+        let exp = parseInt(localStorage.getItem('e')) || 0;
+        let daily = parseInt(localStorage.getItem('d')) || 0;
+        let claimed = JSON.parse(localStorage.getItem('cl')) || [];
+        let hasTitle = localStorage.getItem('t') === 'true';
+
+        let mult = 1; let combo = 0; let comboT; let auto = 0;
+        const XP_STEP = 2000;
+
+        function updateUI() {
+            document.getElementById('score').innerText = Math.floor(clicks).toLocaleString();
+            document.getElementById('cur-val').innerText = currency;
+            document.getElementById('top-val').innerText = Math.floor(clicks).toLocaleString();
+            document.getElementById('player-title').innerText = hasTitle ? "✨ ЦИТРУСОВЫЙ РЫЦАРЬ ✨" : "";
+            
+            let lvl = Math.min(55, Math.floor(exp / XP_STEP) + 1);
+            document.getElementById('pass-mini-bar').style.width = (lvl === 55 ? 100 : (exp % XP_STEP) / XP_STEP * 100) + '%';
+
+            let s = '🍋'; auto = 0;
+            if(clicks >= 10000) { s='👔'; auto=1; }
+            if(clicks >= 100000) { s='😎'; auto=5; }
+            if(clicks >= 500000) { s='💎'; auto=50; }
+            if(clicks >= 1000000) { s='👑'; document.body.style.background = 'radial-gradient(circle, #FFFDE7 0%, #FBC02D 100%)'; }
+            document.getElementById('lemon').innerText = s;
+            document.getElementById('auto-val').innerText = `🤖 ${auto}/s`;
+        }
+
+        document.getElementById('lemon').addEventListener('pointerdown', (e) => {
+            combo++;
+            clearTimeout(comboT);
+            comboT = setTimeout(() => { combo = 0; document.getElementById('combo-info').innerText = ''; }, 800);
+
+            let b = mult;
+            if(combo > 15) { b *= 2; document.getElementById('combo-info').innerText = '🔥 COMBO X2 🔥'; }
+
+            clicks += b; exp += (b * 25);
+            if(Math.floor(clicks) % 50 === 0 && Math.random() < 0.85) currency++;
+            
+            updateUI(); save();
+            showEffect(e.clientX, e.clientY, b);
+            if(tg) tg.HapticFeedback.impactOccurred('light');
+            document.getElementById('lemon').style.transform = 'scale(0.85)';
+            setTimeout(() => document.getElementById('lemon').style.transform = 'scale(1)', 50);
+        });
+
+        function showEffect(x, y, v) {
+            const p = document.createElement('div');
+            p.className = 'plus-one'; p.innerText = '+'+Math.floor(v);
+            p.style.left = (x || window.innerWidth/2) - 20 + 'px';
+            p.style.top = (y || window.innerHeight/2) - 40 + 'px';
+            p.style.color = v > 1 ? '#D32F2F' : '#F57C00';
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 800);
+        }
+
+        setInterval(() => { if(auto > 0) { clicks += auto; updateUI(); save(); } }, 1000);
+
+        function openW(id) { 
+            const el = document.getElementById('modal-'+id);
+            el.style.display = 'flex';
+            setTimeout(() => el.classList.add('active'), 10);
+            if(id === 'pass') buildPass();
+        }
+
+        function buildPass() {
+            const list = document.getElementById('pass-list'); list.innerHTML = '';
+            let clvl = Math.floor(exp / XP_STEP) + 1;
+            for(let i=1; i<=55; i++) {
+                let lock = i > clvl; let c = claimed.includes(i); let isFinal = i === 55;
+                list.innerHTML += `
+                    <div class="pass-card ${lock?'':'unlocked'} ${isFinal?'final':''}">
+                        <div class="lvl-badge">LVL ${i}</div>
+                        <div class="reward-icon">${isFinal?'👑':'🍋'}</div>
+                        <div style="font-size:0.7rem; font-weight:bold">${isFinal?'РЫЦАРЬ':(i*3+' Лимонов')}</div>
+                        ${c ? '✅' : `<button class="claim-btn" onclick="claimP(${i})" ${lock?'disabled':''}>${lock?'🔒':'ВЗЯТЬ'}</button>`}
+                    </div>
+                `;
+            }
+        }
+
+        function claimP(i) { 
+            if(i === 55) hasTitle = true; else currency += (i * 3);
+            claimed.push(i); save(); updateUI(); buildPass();
+            if(tg) tg.HapticFeedback.notificationOccurred('success');
+        }
+
+        function closeW(e) { 
+            if(!e || e.target.className.includes('overlay') || e.target.tagName === 'BUTTON') {
+                document.querySelectorAll('.overlay').forEach(el => {
+                    el.classList.remove('active');
+                    setTimeout(() => el.style.display = 'none', 300);
+                });
+            }
+        }
+
+        function buyB(m, mins, p) {
+            if(currency >= p) { currency -= p; mult = m; setTimeout(()=>mult=1, mins*60000); tg?.showAlert("Бустер активирован!"); closeW(); save(); updateUI(); }
+            else tg?.showAlert("Мало лимонов! 🍋");
+        }
+
+        function getDaily() {
+            let now = Date.now();
+            if(now - daily >= 86400000) { currency += 15; daily = now; save(); updateUI(); tg?.showAlert("Бонус 15 🍋!"); }
+            else tg?.showAlert("Завтра!");
+        }
+
+        function save() {
+            localStorage.setItem('c', Math.floor(clicks)); localStorage.setItem('cur', currency);
+            localStorage.setItem('e', exp); localStorage.setItem('d', daily);
+            localStorage.setItem('cl', JSON.stringify(claimed)); localStorage.setItem('t', hasTitle);
+        }
+        updateUI();
+    </script>
+</body>
+</html>
